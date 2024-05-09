@@ -1,8 +1,6 @@
 # Argos
 
-## Descripción
-
-Argos es un sistema de monitoreo de redes que ofrece visibilidad y control integrales sobre la infraestructura de red. Permite monitorear el rendimiento de la red, detectar y solucionar problemas de forma proactiva, y garantizar la disponibilidad y confiabilidad de la red.
+Distema de monitoreo de redes que ofrece visibilidad y control integrales sobre la infraestructura de red. Permite monitorear el rendimiento de la red, detectar y solucionar problemas de forma proactiva, y garantizar la disponibilidad y confiabilidad de la red.
 
 ## Características
 
