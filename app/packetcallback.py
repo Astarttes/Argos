@@ -1,38 +1,83 @@
-def packet_callback(pkt):
-    """
-    Purpose: Procesar paquetes de red capturados.
+import psutil
+import pyshark
+from time import sleep
+from datetime import datetime 
 
-    Args:
-        pkt (pyshark.packet.Packet): Paquete capturado.
 
-    Variables globales:
-        src_ip (str): Dirección IP de origen del paquete.
-        src_port (int): Puerto de origen del paquete.
-        src_process (str): Nombre del proceso asociado con la dirección IP y el puerto de origen.
-        dst_ip (str): Dirección IP de destino del paquete.
-        dst_port (int): Puerto de destino del paquete.
-        dst_process (str): Nombre del proceso asociado con la dirección IP y el puerto de destino.
+class PacketAnalyzer:
+    def __init__(self, interface):
+        self.interface = interface
+        self.src_ip = None
+        self.src_port = None
+        self.src_process = None
+        self.dst_ip = None
+        self.dst_port = None
+        self.dst_process = None
 
-    Comportamiento:
-        1. Comprueba si el paquete contiene una capa de protocolo de Internet (IP).
-        2. Si el paquete contiene una capa IP, extrae las direcciones IP de origen y destino del paquete.
-        3. Si el paquete contiene una capa de protocolo de control de transmisión (TCP) o de protocolo de datagramas de usuario (UDP), extrae los puertos de origen y destino del paquete.
-        4. Llama a la función `getprocess` para obtener los nombres de los procesos asociados con las direcciones IP y los puertos de origen y destino.
-        5. Imprime la siguiente información:
-            * Dirección IP de origen, puerto y nombre del proceso.
-            * Dirección IP de destino, puerto y nombre del proceso.
-    """
-    if "IP" in pkt:
-        src_ip = pkt["IP"].src
-        dst_ip = pkt["IP"].dst
-        src_port = None
-        dst_port = None
-        if "TCP" in pkt:
-            src_port = pkt["TCP"].srcport
-            dst_port = pkt["TCP"].dstport
-        elif "UDP" in pkt:
-            src_port = pkt["UDP"].srcport
-            dst_port = pkt["UDP"].dstport
+    def get_process_name(self, pid):
+        try:
+            return psutil.Process(pid).name()
+        except psutil.NoSuchProcess:
+            return "Desconocido"
 
-        print(f"Desde: {src_ip} Puerto:{src_port} hacia {dst_ip} Puerto:{dst_port}")
-       
+    def get_process_from_connection(self, ip_address, port):
+        for conn in psutil.net_connections(kind='inet'):
+            try:
+                if (conn.laddr.ip == ip_address and conn.laddr.port == port) or \
+                   (conn.raddr and conn.raddr.ip == ip_address and conn.raddr.port == port):
+                    return self.get_process_name(conn.pid)
+            except psutil.NoSuchProcess:
+                pass
+        return "Desconocido"
+
+    def get_process(self, ip_address, port):
+        process_name = "Desconocido"
+        try:
+            # Buscamos la conexión basada en la dirección IP y el puerto
+            process_name = self.get_process_from_connection(ip_address, port)
+            
+            # Si no se encuentra, intentamos buscar en las conexiones TCP establecidas
+            if process_name == "Desconocido" and ip_address != "0.0.0.0":
+                for conn in psutil.net_connections(kind='tcp'):
+                    try:
+                        if (conn.laddr.ip == ip_address and conn.laddr.port == port) or \
+                           (conn.raddr and conn.raddr.ip == ip_address and conn.raddr.port == port):
+                            process_name = self.get_process_name(conn.pid)
+                            break
+                    except psutil.NoSuchProcess:
+                        pass
+        except (PermissionError, psutil.AccessDenied):
+            pass
+        
+        return process_name
+
+    def packet_callback(self, pkt):
+        if "IP" in pkt:
+            self.src_ip = pkt["IP"].src
+            self.dst_ip = pkt["IP"].dst
+            self.src_port = None
+            self.dst_port = None
+            protocol = "UDP" if "UDP" in pkt else "TCP"
+            packet_size = len(pkt)
+            
+            if "TCP" in pkt:
+                self.src_port = pkt["TCP"].srcport
+                self.dst_port = pkt["TCP"].dstport
+            elif "UDP" in pkt:
+                self.src_port = pkt["UDP"].srcport
+                self.dst_port = pkt["UDP"].dstport
+            self.src_process = self.get_process(self.src_ip, int(self.src_port))
+            self.dst_process = self.get_process(self.dst_ip, int(self.dst_port))
+            if self.src_process == "Desconocido":
+                self.src_process = ""
+            sleep(2)
+            print(f"""Time: 
+                  {(datetime.now()).strftime("%H:%M:%S")} 
+                  Protocolo: {protocol} 
+                  Desde: {self.src_ip}:{self.src_port} ({self.src_process}) 
+                  hacia {self.dst_ip}:{self.dst_port} ({self.dst_process}) 
+                  Tamaño: {packet_size} bytes""")
+
+    def start_capture(self):
+        capture = pyshark.LiveCapture(interface=self.interface, bpf_filter="ip")
+        capture.apply_on_packets(self.packet_callback)

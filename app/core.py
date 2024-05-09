@@ -1,8 +1,9 @@
-from packetcallback import packet_callback as pkc
-import pyshark as pys
 import psutil
-from os import system as sys
 from time import sleep
+from packetcallback import PacketAnalyzer
+from os import system as sys
+from server import start_server
+import threading
 
 def presentation():
     try:
@@ -14,44 +15,24 @@ def presentation():
     print("/////////////////////////////////////////")
     sleep(3)
 
-
 def initpackettracer():
     print("/////////////////////////////////////////")
     print("/// Selecciona la interfaz:           ///")
-    interfaces = psutil.net_if_addrs()  # get the interfaces / obtiene las interfaces
+    interfaces = psutil.net_if_addrs() #get the interfaces / obtiene las interfaces
     for interface, addr in interfaces.items():
-        print(f"/// [+]{interface}")
-    interface = input("/// [+]:")
-    (
-        pys.LiveCapture(
-            interface=interface, bpf_filter="ip"
-        )
-    ).apply_on_packets(
-        pkc
-    )
-
-
-
-
-def getprocess():
-    """
-    Purpose:
-    """
-
+        print(f"[+]{interface}")
+    interface = input("[+]:")
+    analyzer = PacketAnalyzer(interface)
+    analyzer.start_capture()
 
 def comunication():
-    """
-    Purpose:
-    """
-
+    pass
 
 def wall():
-    """
-    Purpose:
-    """
+    pass
 
-
-# end def
+def makeserver():
+    start_server()
 
 def menu():
     try:
@@ -60,30 +41,28 @@ def menu():
         sys("clear")  # on Linux
     options = {
         1: initpackettracer,
-        2: getprocess,
-        3: comunication,
-        4: wall
+        2: comunication,
+        3: wall,
+        4: makeserver
     }
 
-    while True:
-        print("/////////////////////////////////////////")
-        print("/// Selecciona Una opcion:            ///")
-        print("///                                   ///")
-        print("/// 1: Iniciar Monitoreo De Red       ///")
-        print("/// 2: Monitorear Aplicaciones i/o    ///")
-        print("/// 3: Configurar Alertas             ///")
-        print("/// 4: Iniciar/Configurar Firewall    ///")
-        print("///                                   ///")
-        print("/////////////////////////////////////////")
-        option = int(input("/// [+]:"))
-        if option not in options:
-            print("/// Seleccion Erronea")
-            continue
-        if option == 1:
-            initpackettracer()
+    print("/////////////////////////////////////////")
+    print("/// Selecciona Una opcion:            ///")
+    print("///                                   ///")
+    print("/// 1: Iniciar Monitoreo De Red       ///")
+    print("/// 2: Configurar Alertas             ///")
+    print("/// 3: Iniciar/Configurar Firewall    ///")
+    print("/// 4: Ver gráfica de uso de recursos ///")
+    print("///                                   ///")
+    print("/////////////////////////////////////////")
+    option = int(input("/// [+]: "))
+    if option not in options:
+        print("/// Seleccion Erronea")
+        return
 
-
+    options[option]()
 
 if __name__ == "__main__":
     presentation()
-    menu()
+    menu_thread = threading.Thread(target=menu)
+    menu_thread.start()
